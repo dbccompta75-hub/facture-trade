@@ -133,19 +133,21 @@ def generate_pdf_bytes(fa_num, fa_date, total_ht, qty):
               "Pénalités de retard : 3x taux légal<br/>"
               "TVA non applicable - Article 297-A du CGI<br/>"
               "Régime particulier - Biens d'occasion")
-    def bloc(corps):
-        t = Table([[P(corps,9)]], colWidths=[(CW-6*mm)/2])
-        t.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,-1),LIGHT),
-            ('LINEBEFORE',(0,0),(0,-1),3,NAVY),
-            ('LEFTPADDING',(0,0),(-1,-1),10),('RIGHTPADDING',(0,0),(-1,-1),8),
-            ('TOPPADDING',(0,0),(-1,-1),9),('BOTTOMPADDING',(0,0),(-1,-1),10)]))
-        return t
-    bas = Table([[bloc(banque), '', bloc(cond)]],
-                colWidths=[(CW-6*mm)/2, 6*mm, (CW-6*mm)/2])
-    bas.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
-        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
-        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    # Une seule ligne de tableau => les deux encadrés ont la MÊME hauteur
+    colw = (CW-6*mm)/2
+    bas = Table([[P(banque,9), '', P(cond,9)]],
+                colWidths=[colw, 6*mm, colw])
+    bas.setStyle(TableStyle([
+        ('VALIGN',(0,0),(-1,-1),'TOP'),
+        # fond gris clair + filet marine à gauche des 2 colonnes de contenu
+        ('BACKGROUND',(0,0),(0,0),LIGHT),('BACKGROUND',(2,0),(2,0),LIGHT),
+        ('LINEBEFORE',(0,0),(0,0),3,NAVY),('LINEBEFORE',(2,0),(2,0),3,NAVY),
+        # paddings des colonnes de contenu
+        ('LEFTPADDING',(0,0),(0,0),10),('RIGHTPADDING',(0,0),(0,0),8),
+        ('LEFTPADDING',(2,0),(2,0),10),('RIGHTPADDING',(2,0),(2,0),8),
+        ('TOPPADDING',(0,0),(-1,-1),9),('BOTTOMPADDING',(0,0),(-1,-1),10),
+        # colonne centrale = simple espace blanc
+        ('LEFTPADDING',(1,0),(1,0),0),('RIGHTPADDING',(1,0),(1,0),0)]))
     s += [bas]
 
     # ── PIED DE PAGE ───────────────────────────────────────────────────────────
