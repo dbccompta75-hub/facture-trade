@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify, Response, send_file
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 
@@ -14,76 +14,150 @@ app = Flask(__name__)
 MOIS = ['','janvier','février','mars','avril','mai','juin',
         'juillet','août','septembre','octobre','novembre','décembre']
 
-def P(text, size=8, align=TA_LEFT, bold=False, color=colors.black):
+def P(text, size=8, align=TA_LEFT, bold=False, color=colors.black, italic=False):
+    if bold and italic: fn = 'Helvetica-BoldOblique'
+    elif bold:          fn = 'Helvetica-Bold'
+    elif italic:        fn = 'Helvetica-Oblique'
+    else:               fn = 'Helvetica'
     return Paragraph(text, ParagraphStyle('x',
-        fontName='Helvetica-Bold' if bold else 'Helvetica',
-        fontSize=size, leading=size+2, alignment=align, textColor=color))
+        fontName=fn, fontSize=size, leading=size+3, alignment=align, textColor=color))
 
 def fmt(n):
     return f"{n:,.2f}".replace(',', ' ').replace('.', ',') + ' €'
 
 def generate_pdf_bytes(fa_num, fa_date, total_ht, qty):
-    RB  = colors.HexColor('#1f4e8c')
+    NAVY  = colors.HexColor('#22345b')   # bleu marine (bandeaux, filets, montants)
+    LIGHT = colors.HexColor('#eef1f6')   # fond gris clair des encadrés
+    GREY  = colors.HexColor('#8a8f99')   # gris labels / pied de page
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=12*mm, rightMargin=12*mm,
-                            topMargin=12*mm, bottomMargin=18*mm)
-    s = []
-    s += [P('TRADE TRONICS',22,TA_CENTER,True,RB),
-          P("Commerce de gros – Électronique d'occasion",8,TA_CENTER,color=colors.grey),
-          P('FACTURE',11,TA_CENTER),
-          P(f'FA-{fa_num:04d}',18,TA_CENTER,True,RB),
-          P(f'{fa_date.day} {MOIS[fa_date.month]} {fa_date.year}',9,TA_CENTER),
-          Spacer(1,6)]
+                            leftMargin=15*mm, rightMargin=15*mm,
+                            topMargin=14*mm, bottomMargin=20*mm)
+    CW = A4[0] - 30*mm          # largeur utile
+    s  = []
+
+    # ── EN-TÊTE : logo « TT » + raison sociale  |  FACTURE + numéro ─────────────
+    logo = Table([[P('TT', 16, TA_CENTER, True, colors.white)]],
+                 colWidths=[15*mm], rowHeights=[15*mm])
+    logo.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,-1),NAVY),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    left = Table([[logo,
+                   [P('TRADE TRONICS',20,TA_LEFT,True,NAVY),
+                    P("Commerce de gros – Électronique d'occasion",8,TA_LEFT,
+                      color=GREY,italic=True)]]],
+                 colWidths=[17*mm, CW*0.55 - 17*mm])
+    left.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(0,0),4),
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    right = [P('FACTURE',20,TA_RIGHT,True,NAVY),
+             P(f'N° FA-{fa_num:04d}',11,TA_RIGHT,color=GREY)]
+    head = Table([[left, right]], colWidths=[CW*0.55, CW*0.45])
+    head.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    s += [head, Spacer(1,4),
+          HRFlowable(width='100%', thickness=1.5, color=NAVY,
+                     spaceBefore=0, spaceAfter=12)]
+
+    # ── ÉMETTEUR / DESTINATAIRE ────────────────────────────────────────────────
     em = ("<b>TRADE TRONICS</b><br/>SASU au capital de 500,00 €<br/>"
           "Bureau 326, 78 Avenue des Champs Élysées<br/>"
           "75008 Paris, France<br/>SIRET : 934 635 301 00013<br/>TVA : FR53934635301")
     de = ("<b>GATE TECHNOLOGY</b><br/>59 Avenue du Général de Gaulle<br/>"
           "Centre Commercial Westfield Rosny 2<br/>"
           "93110 Rosny-sous-Bois, France<br/>SIRET : 938 435 351 00011<br/>TVA : FR84938435351")
-    hdr = Table([[P('ÉMETTEUR',9,bold=True,color=colors.white),
-                  P('DESTINATAIRE',9,bold=True,color=colors.white)],
-                 [P(em,8),P(de,8)]], colWidths=[92*mm,92*mm])
-    hdr.setStyle(TableStyle([
-        ('BACKGROUND',(0,0),(-1,0),RB),('BOX',(0,0),(-1,-1),.5,colors.grey),
-        ('INNERGRID',(0,0),(-1,-1),.3,colors.grey),
-        ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
-        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
-    s += [hdr, Spacer(1,4)]
+    def party(titre, corps):
+        t = Table([[P(titre,9,bold=True,color=colors.white)],[P(corps,9)]],
+                  colWidths=[(CW-6*mm)/2])
+        t.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),NAVY),('BACKGROUND',(0,1),(-1,1),LIGHT),
+            ('LEFTPADDING',(0,0),(-1,-1),8),('RIGHTPADDING',(0,0),(-1,-1),8),
+            ('TOPPADDING',(0,0),(-1,0),5),('BOTTOMPADDING',(0,0),(-1,0),5),
+            ('TOPPADDING',(0,1),(-1,1),8),('BOTTOMPADDING',(0,1),(-1,1),10)]))
+        return t
+    parties = Table([[party('ÉMETTEUR',em), '', party('DESTINATAIRE',de)]],
+                    colWidths=[(CW-6*mm)/2, 6*mm, (CW-6*mm)/2])
+    parties.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    s += [parties, Spacer(1,10)]
+
+    # ── DATE / ÉCHÉANCE / RÈGLEMENT ────────────────────────────────────────────
     ech = fa_date + datetime.timedelta(days=30)
-    info = Table([[P("DATE D'ÉMISSION",8,bold=True),P('ÉCHÉANCE',8,bold=True),
-                   P('MODE DE RÈGLEMENT',8,bold=True)],
-                  [P(fa_date.strftime('%d/%m/%Y'),9,bold=True),
-                   P(ech.strftime('%d/%m/%Y'),9,bold=True),
-                   P('Virement bancaire',9)]], colWidths=[61*mm,61*mm,62*mm])
+    info = Table([[P("DATE D'ÉMISSION",8,TA_CENTER,True,GREY),
+                   P('ÉCHÉANCE',8,TA_CENTER,True,GREY),
+                   P('MODE DE RÈGLEMENT',8,TA_CENTER,True,GREY)],
+                  [P(fa_date.strftime('%d/%m/%Y'),11,TA_CENTER,True,NAVY),
+                   P(ech.strftime('%d/%m/%Y'),11,TA_CENTER,True,NAVY),
+                   P('Virement bancaire',11,TA_CENTER,True,NAVY)]],
+                 colWidths=[CW/3]*3)
     info.setStyle(TableStyle([
-        ('BOX',(0,0),(-1,-1),.5,colors.grey),('INNERGRID',(0,0),(-1,-1),.3,colors.grey),
+        ('BACKGROUND',(0,0),(-1,-1),LIGHT),
+        ('LINEAFTER',(0,0),(0,-1),.6,colors.white),
+        ('LINEAFTER',(1,0),(1,-1),.6,colors.white),
         ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
-        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3)]))
-    s += [info, Spacer(1,8), P('RÉCAPITULATIF',12,TA_LEFT,True,RB), Spacer(1,4)]
-    sd = [[P('CATÉGORIE',10,bold=True,color=colors.white),
-           P('QTÉ',10,bold=True,color=colors.white,align=TA_CENTER),
-           P('TOTAL HT',10,bold=True,color=colors.white,align=TA_RIGHT)],
-          [P('Apple iPhone',10),P(str(qty),10,TA_CENTER),P(fmt(total_ht),10,TA_RIGHT,bold=True)],
-          [P('TOTAL',11,bold=True),P(str(qty),11,TA_CENTER,True),P(fmt(total_ht),11,TA_RIGHT,True,RB)]]
-    st = Table(sd, colWidths=[120*mm,30*mm,36*mm])
+        ('TOPPADDING',(0,0),(-1,0),8),('BOTTOMPADDING',(0,0),(-1,0),2),
+        ('TOPPADDING',(0,1),(-1,1),2),('BOTTOMPADDING',(0,1),(-1,1),8)]))
+    s += [info, Spacer(1,14)]
+
+    # ── TABLEAU RÉCAPITULATIF ──────────────────────────────────────────────────
+    sd = [[P('CATÉGORIE',10,TA_LEFT,True,colors.white),
+           P('QTÉ',10,TA_CENTER,True,colors.white),
+           P('TOTAL HT',10,TA_RIGHT,True,colors.white)],
+          [P('Apple iPhone',10),P(str(qty),10,TA_CENTER),P(fmt(total_ht),10,TA_RIGHT)],
+          [P('TOTAL',12,TA_LEFT,True,NAVY),'',P(fmt(total_ht),13,TA_RIGHT,True,NAVY)]]
+    st = Table(sd, colWidths=[CW-56*mm, 26*mm, 30*mm])
     st.setStyle(TableStyle([
-        ('BACKGROUND',(0,0),(-1,0),RB),
-        ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#eef2f8')),
-        ('LINEBELOW',(0,0),(-1,-1),.3,colors.lightgrey),
-        ('LINEABOVE',(0,-1),(-1,-1),.5,colors.grey),
-        ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
-        ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
-    s += [st, Spacer(1,10),
-          P("<i>Voir annexe pour les détails.</i>",9,TA_CENTER,color=colors.grey)]
+        ('BACKGROUND',(0,0),(-1,0),NAVY),
+        ('BACKGROUND',(0,2),(-1,2),LIGHT),
+        ('LINEBELOW',(0,1),(-1,1),.4,colors.HexColor('#d5dae3')),
+        ('LEFTPADDING',(0,0),(-1,-1),8),('RIGHTPADDING',(0,0),(-1,-1),8),
+        ('TOPPADDING',(0,0),(-1,0),6),('BOTTOMPADDING',(0,0),(-1,0),6),
+        ('TOPPADDING',(0,1),(-1,1),9),('BOTTOMPADDING',(0,1),(-1,1),9),
+        ('TOPPADDING',(0,2),(-1,2),9),('BOTTOMPADDING',(0,2),(-1,2),9)]))
+    s += [st, Spacer(1,8),
+          P(f"Voir annexe pour le détail des {qty} unités.",9,TA_LEFT,
+            color=GREY,italic=True)]
+
+    # ── ESPACE puis COORDONNÉES BANCAIRES / CONDITIONS (bas de page) ────────────
+    s += [Spacer(1,60*mm)]
+    banque = ("<b>COORDONNÉES BANCAIRES</b><br/><br/>"
+              "<b>Pays :</b> BELGIQUE<br/>"
+              "<b>IBAN :</b> BE58 9771 0386 1179<br/>"
+              "<b>Code SWIFT/BIC :</b> PAYVBEB2XXX")
+    cond   = ("<b>CONDITIONS</b><br/><br/>"
+              "Paiement à 30 jours<br/>"
+              "Escompte pour paiement anticipé : Néant<br/>"
+              "Pénalités de retard : 3x taux légal<br/>"
+              "TVA non applicable - Article 297-A du CGI<br/>"
+              "Régime particulier - Biens d'occasion")
+    def bloc(corps):
+        t = Table([[P(corps,9)]], colWidths=[(CW-6*mm)/2])
+        t.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,-1),LIGHT),
+            ('LINEBEFORE',(0,0),(0,-1),3,NAVY),
+            ('LEFTPADDING',(0,0),(-1,-1),10),('RIGHTPADDING',(0,0),(-1,-1),8),
+            ('TOPPADDING',(0,0),(-1,-1),9),('BOTTOMPADDING',(0,0),(-1,-1),10)]))
+        return t
+    bas = Table([[bloc(banque), '', bloc(cond)]],
+                colWidths=[(CW-6*mm)/2, 6*mm, (CW-6*mm)/2])
+    bas.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),
+        ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
+        ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
+    s += [bas]
+
+    # ── PIED DE PAGE ───────────────────────────────────────────────────────────
     def footer(c,d):
-        c.setFont('Helvetica',7); c.setFillColor(colors.grey)
-        c.drawCentredString(A4[0]/2,12*mm,'Voir annexe pour les détails.')
-        c.drawCentredString(A4[0]/2,9*mm,'TRADE TRONICS - SASU')
-        c.drawCentredString(A4[0]/2,6*mm,
-            'RCS Paris 934 635 301 - SIRET 934 635 301 00013 - TVA FR53934635301')
-        c.drawCentredString(A4[0]/2,3*mm,
-            'Bureau 326, 78 Avenue des Champs Elysees, 75008 Paris')
+        c.setStrokeColor(colors.HexColor('#d5dae3')); c.setLineWidth(.5)
+        c.line(15*mm, 16*mm, A4[0]-15*mm, 16*mm)
+        c.setFont('Helvetica',7); c.setFillColor(GREY)
+        c.drawCentredString(A4[0]/2,11*mm,
+            'TRADE TRONICS – SASU au capital de 500,00 € – RCS Paris 934 635 301 '
+            '– SIRET 934 635 301 00013 – TVA FR53934635301')
+        c.drawCentredString(A4[0]/2,7*mm,
+            'Bureau 326, 78 Avenue des Champs Élysées, 75008 Paris')
     doc.build(s, onFirstPage=footer, onLaterPages=footer)
     buf.seek(0)
     return buf
