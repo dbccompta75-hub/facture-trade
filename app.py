@@ -122,7 +122,7 @@ def generate_pdf_bytes(fa_num, fa_date, total_ht, qty):
             color=GREY,italic=True)]
 
     # ── ESPACE puis COORDONNÉES BANCAIRES / CONDITIONS (bas de page) ────────────
-    s += [Spacer(1,60*mm)]
+    s += [Spacer(1,86*mm)]
     banque = ("<b>COORDONNÉES BANCAIRES</b><br/><br/>"
               "<b>Pays :</b> BELGIQUE<br/>"
               "<b>IBAN :</b> BE58 9771 0386 1179<br/>"
