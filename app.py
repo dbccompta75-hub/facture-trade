@@ -85,7 +85,7 @@ def generate_pdf_bytes(fa_num, fa_date, total_ht, qty):
     s += [parties, Spacer(1,10)]
 
     # ── DATE / ÉCHÉANCE / RÈGLEMENT ────────────────────────────────────────────
-    ech = fa_date + datetime.timedelta(days=30)
+    ech = fa_date  # échéance = date d'émission (paiement à réception)
     info = Table([[P("DATE D'ÉMISSION",8,TA_CENTER,True,GREY),
                    P('ÉCHÉANCE',8,TA_CENTER,True,GREY),
                    P('MODE DE RÈGLEMENT',8,TA_CENTER,True,GREY)],
@@ -128,7 +128,7 @@ def generate_pdf_bytes(fa_num, fa_date, total_ht, qty):
               "<b>IBAN :</b> BE58 9771 0386 1179<br/>"
               "<b>Code SWIFT/BIC :</b> PAYVBEB2XXX")
     cond   = ("<b>CONDITIONS</b><br/><br/>"
-              "Paiement à 30 jours<br/>"
+              "Paiement à réception<br/>"
               "Escompte pour paiement anticipé : Néant<br/>"
               "Pénalités de retard : 3x taux légal<br/>"
               "TVA non applicable - Article 297-A du CGI<br/>"
